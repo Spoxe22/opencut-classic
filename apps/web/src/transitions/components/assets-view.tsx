@@ -3,7 +3,11 @@
 import { toast } from "sonner";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { useEditor } from "@/editor/use-editor";
-import { SetTransitionCommand } from "@/commands/transitions";
+import {
+	CreateFilmRollSixCommand,
+	SetTransitionCommand,
+} from "@/commands/transitions";
+import { Button } from "@/components/ui/button";
 import { generateUUID } from "@/utils/id";
 import { mediaTimeFromSeconds, mediaTimeToSeconds } from "@/wasm";
 import {
@@ -13,12 +17,29 @@ import {
 } from "../catalog";
 
 export function TransitionsView() {
+	const editor = useEditor();
 	return (
 		<PanelView title="Transitions">
 			<p className="text-muted-foreground mb-3 px-1 text-xs">
 				Sélectionnez deux images adjacentes de la piste principale, puis cliquez
 				sur un preset.
 			</p>
+			<Button
+				variant="outline"
+				className="mb-3 w-full"
+				onClick={() => {
+					try {
+						editor.command.execute({ command: new CreateFilmRollSixCommand() });
+						toast.success("Film Roll Six créé");
+					} catch (error) {
+						toast.error(
+							error instanceof Error ? error.message : "Sélection invalide",
+						);
+					}
+				}}
+			>
+				Film Roll Six (5 images)
+			</Button>
 			<div className="grid grid-cols-2 gap-2">
 				{transitionCatalog.map((preset, index) => (
 					<TransitionCard key={preset.id} preset={preset} index={index} />

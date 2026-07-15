@@ -8,8 +8,8 @@ use wgpu::util::DeviceExt;
 use crate::{
     BlendMode,
     frame::{
-        EffectPassDescriptor, EffectUniformValueDescriptor, FrameDescriptor, FrameItemDescriptor,
-        LayerDescriptor, TransitionDescriptor,
+        EffectPassDescriptor, EffectUniformValueDescriptor, FilmRollSixDescriptor, FrameDescriptor,
+        FrameItemDescriptor, LayerDescriptor, TransitionDescriptor,
     },
     presets::{encode_preset_params, preset_code},
     texture_pool::TexturePool,
@@ -20,6 +20,7 @@ const LAYER_SHADER_SOURCE: &str = include_str!("shaders/layer.wgsl");
 const BLEND_SHADER_SOURCE: &str = include_str!("shaders/blend.wgsl");
 const MASK_SHADER_SOURCE: &str = include_str!("shaders/mask.wgsl");
 const TRANSITION_SHADER_SOURCE: &str = include_str!("shaders/transition.wgsl");
+const FILM_ROLL_SIX_SHADER_SOURCE: &str = include_str!("shaders/film_roll_six.wgsl");
 
 pub struct RenderFrameOptions<'a, 'surface> {
     pub frame: &'a FrameDescriptor,
@@ -39,6 +40,8 @@ pub struct Compositor {
     mask_pipeline: wgpu::RenderPipeline,
     transition_uniform_bind_group_layout: wgpu::BindGroupLayout,
     transition_pipeline: wgpu::RenderPipeline,
+    film_roll_six_bind_group_layout: wgpu::BindGroupLayout,
+    film_roll_six_pipeline: wgpu::RenderPipeline,
 }
 
 #[derive(Debug, Error)]
@@ -91,6 +94,16 @@ struct TransitionUniformBuffer {
     params: [[f32; 4]; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct FilmRollSixUniformBuffer {
+    resolution: [f32; 2],
+    progress: f32,
+    aspect_ratio: f32,
+    strip_width: f32,
+    _padding: [f32; 3],
+}
+
 impl Compositor {
     pub fn new(context: &GpuContext) -> Self {
         let device = context.device();
@@ -113,6 +126,10 @@ impl Compositor {
         let transition_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("compositor-transition-shader"),
             source: wgpu::ShaderSource::Wgsl(TRANSITION_SHADER_SOURCE.into()),
+        });
+        let film_roll_six_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("compositor-film-roll-six-shader"),
+            source: wgpu::ShaderSource::Wgsl(FILM_ROLL_SIX_SHADER_SOURCE.into()),
         });
 
         let layer_uniform_bind_group_layout =
@@ -171,6 +188,40 @@ impl Compositor {
                     count: None,
                 }],
             });
+        let mut film_roll_six_layout_entries = Vec::with_capacity(11);
+        for index in 0..5 {
+            film_roll_six_layout_entries.push(wgpu::BindGroupLayoutEntry {
+                binding: index * 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            });
+            film_roll_six_layout_entries.push(wgpu::BindGroupLayoutEntry {
+                binding: index * 2 + 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            });
+        }
+        film_roll_six_layout_entries.push(wgpu::BindGroupLayoutEntry {
+            binding: 10,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        });
+        let film_roll_six_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("compositor-film-roll-six-layout"),
+                entries: &film_roll_six_layout_entries,
+            });
 
         let layer_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -208,6 +259,12 @@ impl Compositor {
                     Some(context.texture_sampler_bind_group_layout()),
                     Some(&transition_uniform_bind_group_layout),
                 ],
+                immediate_size: 0,
+            });
+        let film_roll_six_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("compositor-film-roll-six-pipeline-layout"),
+                bind_group_layouts: &[Some(&film_roll_six_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -343,6 +400,40 @@ impl Compositor {
             multiview_mask: None,
             cache: None,
         });
+        let film_roll_six_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("compositor-film-roll-six-pipeline"),
+                layout: Some(&film_roll_six_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &fullscreen_shader,
+                    entry_point: Some("vertex_main"),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<[f32; 2]>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
+                    }],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &film_roll_six_shader,
+                    entry_point: Some("fragment_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: context.texture_format(),
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            });
 
         Self {
             textures: TextureStore::default(),
@@ -357,6 +448,8 @@ impl Compositor {
             mask_pipeline,
             transition_uniform_bind_group_layout,
             transition_pipeline,
+            film_roll_six_bind_group_layout,
+            film_roll_six_pipeline,
         }
     }
 
@@ -417,6 +510,9 @@ impl Compositor {
                 FrameItemDescriptor::Transition(transition) => {
                     scene = self.render_transition(context, &mut encoder, frame, transition)?;
                 }
+                FrameItemDescriptor::FilmRollSix(effect) => {
+                    scene = self.render_film_roll_six(context, &mut encoder, frame, effect)?;
+                }
             }
         }
 
@@ -475,6 +571,9 @@ impl Compositor {
                 }
                 FrameItemDescriptor::Transition(transition) => {
                     scene = self.render_transition(context, &mut encoder, frame, transition)?;
+                }
+                FrameItemDescriptor::FilmRollSix(effect) => {
+                    scene = self.render_film_roll_six(context, &mut encoder, frame, effect)?;
                 }
             }
         }
@@ -601,22 +700,8 @@ impl Compositor {
         frame: &FrameDescriptor,
         transition: &TransitionDescriptor,
     ) -> Result<wgpu::Texture, CompositorError> {
-        let from = self
-            .textures
-            .get(&transition.from_texture_id)
-            .ok_or_else(|| CompositorError::MissingTexture {
-                texture_id: transition.from_texture_id.clone(),
-            })?
-            .texture()
-            .clone();
-        let to = self
-            .textures
-            .get(&transition.to_texture_id)
-            .ok_or_else(|| CompositorError::MissingTexture {
-                texture_id: transition.to_texture_id.clone(),
-            })?
-            .texture()
-            .clone();
+        let from = self.render_layer(context, encoder, frame, &transition.from_layer)?;
+        let to = self.render_layer(context, encoder, frame, &transition.to_layer)?;
         let preset =
             preset_code(&transition.preset).ok_or_else(|| CompositorError::UnknownTransition {
                 preset: transition.preset.clone(),
@@ -703,6 +788,127 @@ impl Compositor {
             render_pass.set_bind_group(0, &from_bind_group, &[]);
             render_pass.set_bind_group(1, &to_bind_group, &[]);
             render_pass.set_bind_group(2, &uniform_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+        Ok(target)
+    }
+
+    fn render_film_roll_six(
+        &mut self,
+        context: &GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: &FrameDescriptor,
+        effect: &FilmRollSixDescriptor,
+    ) -> Result<wgpu::Texture, CompositorError> {
+        let textures = effect
+            .texture_ids
+            .iter()
+            .map(|texture_id| {
+                self.textures
+                    .get(texture_id)
+                    .ok_or_else(|| CompositorError::MissingTexture {
+                        texture_id: texture_id.clone(),
+                    })
+                    .map(|stored| stored.texture().clone())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let views = textures
+            .iter()
+            .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()))
+            .collect::<Vec<_>>();
+        let uniform_buffer =
+            context
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("compositor-film-roll-six-uniform-buffer"),
+                    contents: bytemuck::bytes_of(&FilmRollSixUniformBuffer {
+                        resolution: [frame.width as f32, frame.height as f32],
+                        progress: effect.progress.clamp(0.0, 1.0),
+                        aspect_ratio: frame.width as f32 / frame.height.max(1) as f32,
+                        strip_width: effect.strip_width.clamp(0.2, 1.0),
+                        _padding: [0.0; 3],
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let bind_group = context
+            .device()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("compositor-film-roll-six-bind-group"),
+                layout: &self.film_roll_six_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&views[0]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&views[1]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&views[2]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::TextureView(&views[3]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 7,
+                        resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 8,
+                        resource: wgpu::BindingResource::TextureView(&views[4]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 9,
+                        resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 10,
+                        resource: uniform_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let target = self.texture_pool.acquire(
+            context,
+            frame.width,
+            frame.height,
+            "compositor-film-roll-six",
+        );
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("compositor-film-roll-six-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            render_pass.set_pipeline(&self.film_roll_six_pipeline);
+            render_pass.set_vertex_buffer(0, context.fullscreen_quad().slice(..));
+            render_pass.set_bind_group(0, &bind_group, &[]);
             render_pass.draw(0..6, 0..1);
         }
         Ok(target)

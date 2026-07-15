@@ -180,6 +180,7 @@ export class RendererManager {
 			const scene = buildScene({
 				tracks,
 				transitions: activeScene.transitions,
+				filmRollSix: activeScene.filmRollSix,
 				mediaAssets,
 				duration,
 				canvasSize,

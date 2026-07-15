@@ -141,6 +141,7 @@ class StorageService {
 			isMain: scene.isMain,
 			tracks: this.stripAudioBuffers({ tracks: scene.tracks }),
 			transitions: scene.transitions,
+			filmRollSix: scene.filmRollSix,
 			bookmarks: scene.bookmarks,
 			createdAt: scene.createdAt.toISOString(),
 			updatedAt: scene.updatedAt.toISOString(),
@@ -203,6 +204,7 @@ class StorageService {
 							duration: roundMediaTime({ time: transition.duration }),
 						}))
 					: [],
+				filmRollSix: Array.isArray(scene.filmRollSix) ? scene.filmRollSix : [],
 				bookmarks: normalizeBookmarks({ raw: scene.bookmarks }),
 				createdAt: new Date(scene.createdAt),
 				updatedAt: new Date(scene.updatedAt),

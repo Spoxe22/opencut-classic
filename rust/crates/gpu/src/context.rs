@@ -511,7 +511,14 @@ impl GpuContext {
     ) -> wgpu::Texture {
         let texture = self.create_render_texture(width, height, label);
 
-        if self.supports_external_texture_copies {
+        // wgpu's BrowserWebGpu backend currently unwraps JS exceptions from
+        // copyExternalImageToTexture. Chromium can reject otherwise valid
+        // canvases backed by IndexedDB blob images, turning a recoverable upload
+        // into a WASM trap. The byte upload path is slower but reliable there;
+        // keep the external-copy fast path for WebGL.
+        if self.adapter.get_info().backend == wgpu::Backend::Gl
+            && self.supports_external_texture_copies
+        {
             self.queue.copy_external_image_to_texture(
                 &wgpu::CopyExternalImageSourceInfo {
                     source: wgpu::ExternalImageSource::OffscreenCanvas(canvas.clone()),

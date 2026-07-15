@@ -41,6 +41,7 @@ export function buildDefaultScene({
 			audio: [],
 		},
 		transitions: [],
+		filmRollSix: [],
 		bookmarks: [],
 		createdAt: new Date(),
 		updatedAt: new Date(),

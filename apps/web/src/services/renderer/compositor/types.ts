@@ -27,11 +27,17 @@ export type FrameItemDescriptor =
 	  }
 	| {
 			type: "transition";
-			fromTextureId: string;
-			toTextureId: string;
+			fromLayer: Extract<FrameItemDescriptor, { type: "layer" }>;
+			toLayer: Extract<FrameItemDescriptor, { type: "layer" }>;
 			preset: string;
 			progress: number;
 			params: TransitionParamValues;
+	  }
+	| {
+			type: "filmRollSix";
+			textureIds: [string, string, string, string, string];
+			progress: number;
+			stripWidth: number;
 	  };
 
 export type QuadTransformDescriptor = {

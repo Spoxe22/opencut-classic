@@ -16,7 +16,12 @@ describe("V31 to V32 Migration", () => {
 		expect(result.skipped).toBe(false);
 		expect(result.project.version).toBe(32);
 		const scenes = asRecordArray(result.project.scenes);
-		expect(scenes[0]).toMatchObject({ id: "s1", name: "One", transitions: [] });
+		expect(scenes[0]).toMatchObject({
+			id: "s1",
+			name: "One",
+			transitions: [],
+			filmRollSix: [],
+		});
 		expect(scenes[1]?.transitions).toEqual(existing);
 	});
 

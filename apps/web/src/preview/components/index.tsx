@@ -102,6 +102,9 @@ function RenderTreeController() {
 	const transitions = useEditor(
 		(e) => e.scenes.getActiveSceneOrNull()?.transitions ?? [],
 	);
+	const filmRollSix = useEditor(
+		(e) => e.scenes.getActiveSceneOrNull()?.filmRollSix ?? [],
+	);
 
 	const { width, height } = usePreviewSize();
 
@@ -112,6 +115,7 @@ function RenderTreeController() {
 		const renderTree = buildScene({
 			tracks,
 			transitions,
+			filmRollSix,
 			mediaAssets,
 			duration,
 			canvasSize: { width, height },
@@ -120,7 +124,7 @@ function RenderTreeController() {
 		});
 
 		editor.renderer.setRenderTree({ renderTree });
-	}, [tracks, transitions, mediaAssets, activeProject?.settings.background, width, height]);
+	}, [tracks, transitions, filmRollSix, mediaAssets, activeProject?.settings.background, width, height]);
 
 	return null;
 }

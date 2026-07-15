@@ -16,6 +16,7 @@ import { cn } from "@/utils/ui";
 import { EmptyView } from "./empty-view";
 import type { ElementRef } from "@/timeline";
 import { RemoveTransitionCommand, SetTransitionCommand } from "@/commands/transitions";
+import { UpdateFilmRollSixCommand } from "@/commands/transitions";
 import { transitionCatalog } from "@/transitions/catalog";
 import { mediaTimeFromSeconds, mediaTimeToSeconds } from "@/wasm";
 
@@ -45,6 +46,15 @@ export function PropertiesPanel() {
 				</p>
 			</div>
 		);
+	}
+
+	const filmRoll = editor.scenes
+		.getActiveScene()
+		.filmRollSix.find(
+			(instance) => instance.elementId === selectedElements[0]?.elementId,
+		);
+	if (filmRoll) {
+		return <FilmRollSixProperties instance={filmRoll} />;
 	}
 
 	const mediaAssets = editor.media.getAssets();
@@ -102,6 +112,64 @@ export function PropertiesPanel() {
 			<ScrollArea className="flex-1 scrollbar-hidden">
 				{activeTab.content({ trackId: track.id })}
 			</ScrollArea>
+		</div>
+	);
+}
+
+function FilmRollSixProperties({
+	instance,
+}: {
+	instance: import("@/timeline").FilmRollSixInstance;
+}) {
+	const editor = useEditor();
+	const images = editor.media.getAssets().filter((asset) => asset.type === "image");
+	const updateSources = ({ index, mediaId }: { index: number; mediaId: string }) => {
+		const mediaIds = [...instance.mediaIds] as typeof instance.mediaIds;
+		mediaIds[index] = mediaId;
+		editor.command.execute({
+			command: new UpdateFilmRollSixCommand({ id: instance.id, patch: { mediaIds } }),
+		});
+	};
+	return (
+		<div className="panel bg-background h-full overflow-y-auto rounded-sm border p-4">
+			<h3 className="mb-4 text-sm font-medium">Film Roll Six</h3>
+			{instance.mediaIds.map((mediaId, index) => (
+				<label key={`${index}-${mediaId}`} className="mb-3 block text-xs text-muted-foreground">
+					Image {index + 1}
+					<select
+						value={mediaId}
+						onChange={(event) =>
+							updateSources({ index, mediaId: event.target.value })
+						}
+						className="bg-background mt-1 h-8 w-full rounded border px-2 text-foreground"
+					>
+						{images.map((image) => (
+							<option key={image.id} value={image.id}>
+								{image.name}
+							</option>
+						))}
+					</select>
+				</label>
+			))}
+			<label className="block text-xs text-muted-foreground">
+				Largeur de pellicule ({instance.stripWidth.toFixed(2)})
+				<input
+					type="range"
+					min={0.2}
+					max={1}
+					step={0.01}
+					value={instance.stripWidth}
+					onChange={(event) =>
+						editor.command.execute({
+							command: new UpdateFilmRollSixCommand({
+								id: instance.id,
+								patch: { stripWidth: Number(event.target.value) },
+							}),
+						})
+					}
+					className="mt-1 w-full"
+				/>
+			</label>
 		</div>
 	);
 }

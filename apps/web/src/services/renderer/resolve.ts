@@ -43,6 +43,10 @@ import {
 	TransitionNode,
 	type ResolvedTransitionNodeState,
 } from "./nodes/transition-node";
+import {
+	FilmRollSixNode,
+	type ResolvedFilmRollSixNodeState,
+} from "./nodes/film-roll-six-node";
 import type {
 	ResolvedVisualNodeState,
 	ResolvedVisualSourceNodeState,
@@ -95,11 +99,28 @@ async function resolveNode({
 		node.resolved = resolveEffectLayerNode({ node, context });
 	} else if (node instanceof TransitionNode) {
 		node.resolved = await resolveTransitionNode({ node, context });
+	} else if (node instanceof FilmRollSixNode) {
+		node.resolved = await resolveFilmRollSixNode({ node, context });
 	}
 
 	await Promise.all(
 		node.children.map((child) => resolveNode({ node: child, context })),
 	);
+}
+
+async function resolveFilmRollSixNode({
+	node,
+	context,
+}: {
+	node: FilmRollSixNode;
+	context: ResolveContext;
+}): Promise<ResolvedFilmRollSixNodeState | null> {
+	const localTime = context.time - node.params.timeOffset;
+	if (localTime < 0 || localTime >= node.params.duration) return null;
+	return {
+		sources: await Promise.all(node.params.sources.map(loadImageSource)),
+		progress: Math.min(1, Math.max(0, localTime / node.params.duration)),
+	};
 }
 
 async function resolveTransitionNode({
@@ -112,10 +133,15 @@ async function resolveTransitionNode({
 	const localTime = context.time - node.params.timeOffset;
 	if (localTime < 0 || localTime >= node.params.duration) return null;
 
+	const resolveSource = async (params: typeof node.params.from) =>
+		params.mediaType === "video"
+			? resolveVideoNode({ node: new VideoNode(params), context })
+			: resolveImageNode({ node: new ImageNode(params), context });
 	const [from, to] = await Promise.all([
-		loadImageSource(node.params.from),
-		loadImageSource(node.params.to),
+		resolveSource(node.params.from),
+		resolveSource(node.params.to),
 	]);
+	if (!from || !to) return null;
 	return {
 		from,
 		to,

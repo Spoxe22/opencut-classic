@@ -17,6 +17,7 @@ import { StickerNode } from "../nodes/sticker-node";
 import { renderTextToContext, TextNode } from "../nodes/text-node";
 import { VideoNode } from "../nodes/video-node";
 import { TransitionNode } from "../nodes/transition-node";
+import { FilmRollSixNode } from "../nodes/film-roll-six-node";
 import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
 import type {
 	FrameDescriptor,
@@ -134,29 +135,63 @@ async function collectNode({
 
 	if (node instanceof TransitionNode) {
 		if (!node.resolved) return;
-		const fromTextureId = `${path}:from`;
-		const toTextureId = `${path}:to`;
-		textures.set(fromTextureId, {
-			kind: "external",
-			id: fromTextureId,
-			source: node.resolved.from.source,
-			width: node.resolved.from.width,
-			height: node.resolved.from.height,
+		const fromNode =
+			node.params.from.mediaType === "video"
+				? new VideoNode(node.params.from)
+				: new ImageNode(node.params.from);
+		fromNode.resolved = node.resolved.from;
+		const toNode =
+			node.params.to.mediaType === "video"
+				? new VideoNode(node.params.to)
+				: new ImageNode(node.params.to);
+		toNode.resolved = node.resolved.to;
+		const fromLayer = buildTransitionLayer({
+			node: fromNode,
+			renderer,
+			path: `${path}:from`,
+			textures,
 		});
-		textures.set(toTextureId, {
-			kind: "external",
-			id: toTextureId,
-			source: node.resolved.to.source,
-			width: node.resolved.to.width,
-			height: node.resolved.to.height,
+		const toLayer = buildTransitionLayer({
+			node: toNode,
+			renderer,
+			path: `${path}:to`,
+			textures,
 		});
 		items.push({
 			type: "transition",
-			fromTextureId,
-			toTextureId,
+			fromLayer,
+			toLayer,
 			preset: node.params.type,
 			progress: node.resolved.progress,
 			params: node.params.params,
+		});
+		return;
+	}
+
+	if (node instanceof FilmRollSixNode) {
+		if (!node.resolved || node.resolved.sources.length !== 5) return;
+		const textureIds = node.resolved.sources.map((source, index) => {
+			const id = `${path}:source:${index}`;
+			textures.set(id, {
+				kind: "external",
+				id,
+				source: source.source,
+				width: source.width,
+				height: source.height,
+			});
+			return id;
+		});
+		items.push({
+			type: "filmRollSix",
+			textureIds: [
+				textureIds[0],
+				textureIds[1],
+				textureIds[2],
+				textureIds[3],
+				textureIds[4],
+			],
+			progress: node.resolved.progress,
+			stripWidth: node.params.stripWidth,
 		});
 		return;
 	}
@@ -233,6 +268,51 @@ async function collectNode({
 			textures,
 		});
 	}
+}
+
+function buildTransitionLayer({
+	node,
+	renderer,
+	path,
+	textures,
+}: {
+	node: ImageNode | VideoNode;
+	renderer: CanvasRenderer;
+	path: string;
+	textures: Map<string, TextureUploadDescriptor>;
+}): Extract<FrameItemDescriptor, { type: "layer" }> {
+	const resolved = node.resolved;
+	if (!resolved) throw new Error("Transition source is not resolved");
+	const textureId = `${path}:source`;
+	textures.set(textureId, {
+		kind: "external",
+		id: textureId,
+		source: resolved.source,
+		width: resolved.sourceWidth,
+		height: resolved.sourceHeight,
+	});
+	const transform = computeVisualTransform({
+		renderer,
+		resolved,
+		sourceWidth: resolved.sourceWidth,
+		sourceHeight: resolved.sourceHeight,
+	});
+	const { mask } = buildMaskArtifacts({
+		node,
+		renderer,
+		path,
+		transform,
+		textures,
+	});
+	return {
+		type: "layer",
+		textureId,
+		transform,
+		opacity: resolved.opacity,
+		blendMode: node.params.blendMode ?? "normal",
+		effectPassGroups: resolved.effectPasses,
+		mask,
+	};
 }
 
 async function collectVisualSourceNode({

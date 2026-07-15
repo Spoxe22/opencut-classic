@@ -4,6 +4,7 @@ import type {
 	SceneTracks,
 	TScene,
 	TransitionInstance,
+	FilmRollSixInstance,
 } from "@/timeline";
 import { storageService } from "@/services/storage/service";
 import {
@@ -305,9 +306,11 @@ export class ScenesManager {
 	updateSceneTimeline({
 		tracks,
 		transitions,
+		filmRollSix,
 	}: {
 		tracks: SceneTracks;
 		transitions?: TransitionInstance[];
+		filmRollSix?: FilmRollSixInstance[];
 	}): void {
 		if (!this.active) return;
 
@@ -315,6 +318,7 @@ export class ScenesManager {
 			...this.active,
 			tracks,
 			transitions: transitions ?? this.active.transitions,
+			filmRollSix: filmRollSix ?? this.active.filmRollSix,
 			updatedAt: new Date(),
 		};
 

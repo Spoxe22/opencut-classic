@@ -1,11 +1,12 @@
 import type { TransitionParamValues } from "@/timeline";
 import { BaseNode } from "./base-node";
+import type { ImageNodeParams } from "./image-node";
+import type { VideoNodeParams } from "./video-node";
+import type { ResolvedVisualSourceNodeState } from "./visual-node";
 
-export interface TransitionSource {
-	id: string;
-	url: string;
-	maxSourceSize?: number;
-}
+export type TransitionSource =
+	| (ImageNodeParams & { id: string; mediaType: "image" })
+	| (VideoNodeParams & { id: string; mediaType: "video" });
 
 export interface TransitionNodeParams {
 	from: TransitionSource;
@@ -17,8 +18,8 @@ export interface TransitionNodeParams {
 }
 
 export interface ResolvedTransitionNodeState {
-	from: { source: CanvasImageSource; width: number; height: number };
-	to: { source: CanvasImageSource; width: number; height: number };
+	from: ResolvedVisualSourceNodeState;
+	to: ResolvedVisualSourceNodeState;
 	progress: number;
 }
 

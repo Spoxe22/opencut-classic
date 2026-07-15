@@ -2,6 +2,9 @@ import type {
 	SceneTracks,
 	TimelineTrack,
 	TransitionInstance,
+	FilmRollSixInstance,
+	ImageElement,
+	VideoElement,
 } from "@/timeline";
 import type { MediaAsset } from "@/media/types";
 import { RootNode } from "./nodes/root-node";
@@ -13,7 +16,11 @@ import { GraphicNode } from "./nodes/graphic-node";
 import { ColorNode } from "./nodes/color-node";
 import { BlurBackgroundNode } from "./nodes/blur-background-node";
 import { EffectLayerNode } from "./nodes/effect-layer-node";
-import { TransitionNode } from "./nodes/transition-node";
+import {
+	TransitionNode,
+	type TransitionSource,
+} from "./nodes/transition-node";
+import { FilmRollSixNode } from "./nodes/film-roll-six-node";
 import type { AnyBaseNode } from "./nodes/base-node";
 import type { TBackground, TCanvasSize } from "@/project/types";
 import { DEFAULT_BACKGROUND_BLUR_INTENSITY } from "@/background/blur";
@@ -226,6 +233,7 @@ export type BuildSceneParams = {
 	duration: number;
 	background: TBackground;
 	transitions?: TransitionInstance[];
+	filmRollSix?: FilmRollSixInstance[];
 	isPreview?: boolean;
 };
 
@@ -236,6 +244,7 @@ export function buildScene({
 	duration,
 	background,
 	transitions = [],
+	filmRollSix = [],
 	isPreview,
 }: BuildSceneParams) {
 	const rootNode = new RootNode({ duration });
@@ -245,8 +254,17 @@ export function buildScene({
 		(track) => !("hidden" in track && track.hidden),
 	);
 	const mainTrack = tracks.main.hidden ? undefined : tracks.main;
+	const filmRollElementIds = new Set(filmRollSix.map((instance) => instance.elementId));
+	const renderedMainTrack = mainTrack
+		? {
+				...mainTrack,
+				elements: mainTrack.elements.filter(
+					(element) => !filmRollElementIds.has(element.id),
+				),
+			}
+		: undefined;
 	const mainNodes = buildTrackNodes({
-		tracks: mainTrack ? [mainTrack] : [],
+		tracks: renderedMainTrack ? [renderedMainTrack] : [],
 		mediaMap,
 		canvasSize,
 		isPreview,
@@ -281,28 +299,100 @@ export function buildScene({
 
 	if (mainTrack) {
 		const elements = new Map(mainTrack.elements.map((element) => [element.id, element]));
+		for (const instance of filmRollSix) {
+			const placeholder = elements.get(instance.elementId);
+			if (!placeholder) continue;
+			const assets = instance.mediaIds.map((id) => mediaMap.get(id));
+			if (
+				!assets.every(
+					(asset): asset is MediaAsset & { url: string } =>
+						typeof asset?.url === "string",
+				)
+			)
+				continue;
+			const source = (asset: MediaAsset & { url: string }) => ({
+				id: asset.id,
+				url: asset.url,
+				...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
+			});
+			rootNode.add(
+				new FilmRollSixNode({
+					sources: [
+						source(assets[0]),
+						source(assets[1]),
+						source(assets[2]),
+						source(assets[3]),
+						source(assets[4]),
+					],
+					stripWidth: instance.stripWidth,
+					timeOffset: placeholder.startTime,
+					duration: placeholder.duration,
+				}),
+			);
+		}
+	}
+
+	if (mainTrack) {
+		const elements = new Map(mainTrack.elements.map((element) => [element.id, element]));
 		for (const transition of transitions) {
 			const from = elements.get(transition.fromElementId);
 			const to = elements.get(transition.toElementId);
-			if (from?.type !== "image" || to?.type !== "image") continue;
+			if (
+				(from?.type !== "image" && from?.type !== "video") ||
+				(to?.type !== "image" && to?.type !== "video")
+			)
+				continue;
 			const fromMedia = mediaMap.get(from.mediaId);
 			const toMedia = mediaMap.get(to.mediaId);
-			if (!fromMedia?.url || !toMedia?.url) continue;
+			const fromUrl = fromMedia?.url;
+			const toUrl = toMedia?.url;
+			if (!fromMedia || !toMedia || !fromUrl || !toUrl) continue;
+			const transitionSource = ({
+				element,
+				media,
+				url,
+			}: {
+				element: ImageElement | VideoElement;
+				media: MediaAsset;
+				url: string;
+			}): TransitionSource => {
+				const visual = {
+					duration: element.duration,
+					timeOffset: element.startTime,
+					trimStart: element.trimStart,
+					trimEnd: element.trimEnd,
+					transform: buildTransformFromParams({ params: element.params }),
+					animations: element.animations,
+					opacity: readOpacityFromParams({ params: element.params }),
+					blendMode: readBlendModeFromParams({ params: element.params }),
+					effects: element.effects ?? [],
+					masks: element.masks ?? [],
+				};
+				return element.type === "video"
+					? {
+							...visual,
+							id: media.id,
+							mediaType: "video",
+							mediaId: media.id,
+							url,
+							file: media.file,
+							retime: element.retime,
+						}
+					: {
+							...visual,
+							id: media.id,
+							mediaType: "image",
+							url,
+							...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
+						};
+			};
 			rootNode.add(
 				new TransitionNode({
-					from: {
-						id: fromMedia.id,
-						url: fromMedia.url,
-						...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
-					},
-					to: {
-						id: toMedia.id,
-						url: toMedia.url,
-						...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
-					},
+					from: transitionSource({ element: from, media: fromMedia, url: fromUrl }),
+					to: transitionSource({ element: to, media: toMedia, url: toUrl }),
 					type: transition.type,
 					params: transition.params,
-					timeOffset: to.startTime - transition.duration,
+					timeOffset: to.startTime,
 					duration: transition.duration,
 				}),
 			);

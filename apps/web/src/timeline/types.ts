@@ -27,12 +27,20 @@ export interface TransitionInstance {
 	params: TransitionParamValues;
 }
 
+export interface FilmRollSixInstance {
+	id: string;
+	elementId: string;
+	mediaIds: [string, string, string, string, string];
+	stripWidth: number;
+}
+
 export interface TScene {
 	id: string;
 	name: string;
 	isMain: boolean;
 	tracks: SceneTracks;
 	transitions: TransitionInstance[];
+	filmRollSix: FilmRollSixInstance[];
 	bookmarks: Bookmark[];
 	createdAt: Date;
 	updatedAt: Date;

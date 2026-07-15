@@ -25,8 +25,16 @@ export function transformProjectV31ToV32({
 			version: 32,
 			scenes: Array.isArray(project.scenes)
 				? project.scenes.map((scene) =>
-						isRecord(scene) && !Array.isArray(scene.transitions)
-							? { ...scene, transitions: [] }
+						isRecord(scene)
+							? {
+									...scene,
+									transitions: Array.isArray(scene.transitions)
+										? scene.transitions
+										: [],
+									filmRollSix: Array.isArray(scene.filmRollSix)
+										? scene.filmRollSix
+										: [],
+								}
 							: scene,
 					)
 				: project.scenes,

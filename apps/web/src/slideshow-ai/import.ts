@@ -3,10 +3,12 @@ import { processMediaAssets } from "@/media/processing";
 import { buildElementFromMedia } from "@/timeline/element-utils";
 import type {
 	ImageElement,
+	SceneTracks,
 	TransitionInstance,
 	TransitionParamValues,
 } from "@/timeline";
 import { generateUUID } from "@/utils/id";
+import { applyTransitionOverlap } from "@/commands/transitions";
 import {
 	addMediaTime,
 	mediaTimeFromSeconds,
@@ -168,11 +170,20 @@ export async function importSlideshowAiProject({
 			});
 		}
 
-		editor.scenes.updateSceneTimeline({
-			tracks: {
+		let tracks: SceneTracks = {
 				...activeScene.tracks,
 				main: { ...activeScene.tracks.main, elements },
-			},
+			};
+		for (const transition of transitions) {
+			tracks = applyTransitionOverlap({
+				tracks,
+				fromElementId: transition.fromElementId,
+				toElementId: transition.toElementId,
+				delta: transition.duration,
+			});
+		}
+		editor.scenes.updateSceneTimeline({
+			tracks,
 			transitions,
 		});
 		await editor.project.updateSettings({
@@ -183,6 +194,7 @@ export async function importSlideshowAiProject({
 			},
 			pushHistory: false,
 		});
+		await editor.save.flush();
 		return { projectId, warnings };
 	} catch (error) {
 		if (projectId) await editor.project.deleteProjects({ ids: [projectId] });
