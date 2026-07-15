@@ -105,6 +105,13 @@ struct FilmRollSixUniformBuffer {
     _padding: [f32; 7],
 }
 
+#[cfg(test)]
+pub(crate) const TRANSITION_UNIFORM_BUFFER_SIZE: u32 =
+    std::mem::size_of::<TransitionUniformBuffer>() as u32;
+#[cfg(test)]
+pub(crate) const FILM_ROLL_SIX_UNIFORM_BUFFER_SIZE: u32 =
+    std::mem::size_of::<FilmRollSixUniformBuffer>() as u32;
+
 impl Compositor {
     pub fn new(context: &GpuContext) -> Self {
         let device = context.device();
@@ -1283,7 +1290,7 @@ mod tests {
     #[test]
     fn uniform_buffers_match_wgsl_alignment() {
         assert_eq!(std::mem::size_of::<LayerUniformBuffer>(), 48);
-        assert_eq!(std::mem::size_of::<TransitionUniformBuffer>(), 96);
-        assert_eq!(std::mem::size_of::<FilmRollSixUniformBuffer>(), 48);
+        assert_eq!(TRANSITION_UNIFORM_BUFFER_SIZE, 96);
+        assert_eq!(FILM_ROLL_SIX_UNIFORM_BUFFER_SIZE, 48);
     }
 }
