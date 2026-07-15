@@ -650,13 +650,15 @@ export class ProjectManager {
 	private async updateThumbnailFromTimeline(): Promise<boolean> {
 		if (!this.active) return false;
 
-		const tracks = this.editor.scenes.getActiveScene().tracks;
+		const activeScene = this.editor.scenes.getActiveScene();
+		const tracks = activeScene.tracks;
 		const mediaAssets = this.editor.media.getAssets();
 		const duration = this.editor.timeline.getTotalDuration();
 		const { canvasSize, background } = this.active.settings;
 
 		const scene = buildScene({
 			tracks,
+			transitions: activeScene.transitions,
 			mediaAssets,
 			duration: duration || 1,
 			canvasSize,

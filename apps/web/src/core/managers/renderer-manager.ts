@@ -150,7 +150,8 @@ export class RendererManager {
 		const { format, quality, fps, includeAudio } = options;
 
 		try {
-			const tracks = this.editor.scenes.getActiveScene().tracks;
+			const activeScene = this.editor.scenes.getActiveScene();
+			const tracks = activeScene.tracks;
 			const mediaAssets = this.editor.media.getAssets();
 			const activeProject = this.editor.project.getActive();
 
@@ -178,6 +179,7 @@ export class RendererManager {
 
 			const scene = buildScene({
 				tracks,
+				transitions: activeScene.transitions,
 				mediaAssets,
 				duration,
 				canvasSize,

@@ -40,6 +40,7 @@ export function buildDefaultScene({
 			},
 			audio: [],
 		},
+		transitions: [],
 		bookmarks: [],
 		createdAt: new Date(),
 		updatedAt: new Date(),

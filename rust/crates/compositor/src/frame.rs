@@ -26,6 +26,18 @@ pub enum FrameItemDescriptor {
     SceneEffect {
         effect_pass_groups: Vec<Vec<EffectPassDescriptor>>,
     },
+    Transition(TransitionDescriptor),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransitionDescriptor {
+    pub from_texture_id: String,
+    pub to_texture_id: String,
+    pub preset: String,
+    pub progress: f32,
+    #[serde(default)]
+    pub params: HashMap<String, EffectUniformValueDescriptor>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

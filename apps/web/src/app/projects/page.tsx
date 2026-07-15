@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { KeyboardEvent, MouseEvent } from "react";
-import { useEffect, useState } from "react";
+import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { EditorCore } from "@/core";
 import { MigrationDialog } from "@/project/components/migration-dialog";
@@ -67,6 +67,7 @@ import { ProjectInfoDialog } from "@/project/components/project-info-dialog";
 import { RenameProjectDialog } from "@/project/components/rename-project-dialog";
 import { cn } from "@/utils/ui";
 import { ChangelogNotification } from "@/changelog/components/changelog-notification";
+import { importSlideshowAiProject } from "@/slideshow-ai/import";
 const formatProjectDuration = ({
 	duration,
 }: {
@@ -184,6 +185,7 @@ function ProjectsHeader() {
 
 				<div className="flex items-center gap-3 md:gap-4">
 					<SearchBar className="hidden md:block" />
+					<SlideshowImportButton />
 					<NewProjectButton />
 				</div>
 			</div>
@@ -524,6 +526,82 @@ function NewProjectButton() {
 			<span className="text-sm font-medium hidden md:block">New project</span>
 			<span className="text-sm font-medium block md:hidden">New</span>
 		</Button>
+	);
+}
+
+function SlideshowImportButton() {
+	const editor = useEditor();
+	const router = useRouter();
+	const jsonInput = useRef<HTMLInputElement>(null);
+	const folderInput = useRef<HTMLInputElement>(null);
+	const jsonFile = useRef<File | null>(null);
+	const [isImporting, setIsImporting] = useState(false);
+
+	const chooseFolder = (event: ChangeEvent<HTMLInputElement>) => {
+		const selectedJson = jsonFile.current;
+		const files = Array.from(event.target.files ?? []);
+		if (!selectedJson || files.length === 0) return;
+		setIsImporting(true);
+		void importSlideshowAiProject({
+			editor,
+			jsonFile: selectedJson,
+			mediaFiles: files,
+		})
+			.then(({ projectId, warnings }) => {
+				if (warnings.length > 0) {
+					toast.warning("Import terminé avec avertissements", {
+						description: warnings.join(" · "),
+					});
+				}
+				router.push(`/editor/${projectId}`);
+			})
+			.catch((error) => {
+				toast.error("Import Slideshow AI impossible", {
+					description: error instanceof Error ? error.message : "Fichier invalide",
+				});
+			})
+			.finally(() => {
+				setIsImporting(false);
+				event.target.value = "";
+				jsonFile.current = null;
+			});
+	};
+
+	return (
+		<>
+			<input
+				ref={jsonInput}
+				type="file"
+				accept="application/json,.json"
+				className="hidden"
+				onChange={(event) => {
+					jsonFile.current = event.target.files?.[0] ?? null;
+					if (jsonFile.current) {
+						folderInput.current?.setAttribute("webkitdirectory", "");
+						folderInput.current?.click();
+					}
+					event.target.value = "";
+				}}
+			/>
+			<input
+				ref={folderInput}
+				type="file"
+				multiple
+				className="hidden"
+				onChange={chooseFolder}
+			/>
+			<Button
+				variant="outline"
+				size="lg"
+				disabled={isImporting}
+				onClick={() => jsonInput.current?.click()}
+			>
+				<span className="hidden text-sm font-medium md:block">
+					{isImporting ? "Import…" : "Importer Slideshow AI"}
+				</span>
+				<span className="block text-sm font-medium md:hidden">Importer</span>
+			</Button>
+		</>
 	);
 }
 

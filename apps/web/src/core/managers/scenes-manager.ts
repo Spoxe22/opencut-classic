@@ -1,5 +1,10 @@
 import type { EditorCore } from "@/core";
-import type { Bookmark, SceneTracks, TScene } from "@/timeline";
+import type {
+	Bookmark,
+	SceneTracks,
+	TScene,
+	TransitionInstance,
+} from "@/timeline";
 import { storageService } from "@/services/storage/service";
 import {
 	getMainScene,
@@ -294,11 +299,22 @@ export class ScenesManager {
 	}
 
 	updateSceneTracks({ tracks }: { tracks: SceneTracks }): void {
+		this.updateSceneTimeline({ tracks });
+	}
+
+	updateSceneTimeline({
+		tracks,
+		transitions,
+	}: {
+		tracks: SceneTracks;
+		transitions?: TransitionInstance[];
+	}): void {
 		if (!this.active) return;
 
 		const updatedScene: TScene = {
 			...this.active,
 			tracks,
+			transitions: transitions ?? this.active.transitions,
 			updatedAt: new Date(),
 		};
 
@@ -320,5 +336,6 @@ export class ScenesManager {
 			};
 			this.editor.project.setActiveProject({ project: updatedProject });
 		}
+		this.editor.save.markDirty();
 	}
 }

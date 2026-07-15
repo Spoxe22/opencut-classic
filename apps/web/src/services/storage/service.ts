@@ -140,6 +140,7 @@ class StorageService {
 			name: scene.name,
 			isMain: scene.isMain,
 			tracks: this.stripAudioBuffers({ tracks: scene.tracks }),
+			transitions: scene.transitions,
 			bookmarks: scene.bookmarks,
 			createdAt: scene.createdAt.toISOString(),
 			updatedAt: scene.updatedAt.toISOString(),
@@ -196,6 +197,12 @@ class StorageService {
 				name: scene.name,
 				isMain: scene.isMain,
 				tracks: scene.tracks,
+				transitions: Array.isArray(scene.transitions)
+					? scene.transitions.map((transition) => ({
+							...transition,
+							duration: roundMediaTime({ time: transition.duration }),
+						}))
+					: [],
 				bookmarks: normalizeBookmarks({ raw: scene.bookmarks }),
 				createdAt: new Date(scene.createdAt),
 				updatedAt: new Date(scene.updatedAt),

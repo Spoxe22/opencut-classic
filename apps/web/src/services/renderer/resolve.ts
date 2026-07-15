@@ -39,6 +39,10 @@ import { ImageNode, loadImageSource } from "./nodes/image-node";
 import { StickerNode, loadStickerSource } from "./nodes/sticker-node";
 import { TextNode, type ResolvedTextNodeState } from "./nodes/text-node";
 import { VideoNode } from "./nodes/video-node";
+import {
+	TransitionNode,
+	type ResolvedTransitionNodeState,
+} from "./nodes/transition-node";
 import type {
 	ResolvedVisualNodeState,
 	ResolvedVisualSourceNodeState,
@@ -89,11 +93,34 @@ async function resolveNode({
 		node.resolved = await resolveBlurBackgroundNode({ node, context });
 	} else if (node instanceof EffectLayerNode) {
 		node.resolved = resolveEffectLayerNode({ node, context });
+	} else if (node instanceof TransitionNode) {
+		node.resolved = await resolveTransitionNode({ node, context });
 	}
 
 	await Promise.all(
 		node.children.map((child) => resolveNode({ node: child, context })),
 	);
+}
+
+async function resolveTransitionNode({
+	node,
+	context,
+}: {
+	node: TransitionNode;
+	context: ResolveContext;
+}): Promise<ResolvedTransitionNodeState | null> {
+	const localTime = context.time - node.params.timeOffset;
+	if (localTime < 0 || localTime >= node.params.duration) return null;
+
+	const [from, to] = await Promise.all([
+		loadImageSource(node.params.from),
+		loadImageSource(node.params.to),
+	]);
+	return {
+		from,
+		to,
+		progress: Math.min(1, Math.max(0, localTime / node.params.duration)),
+	};
 }
 
 function resolveEffectPassGroups({
@@ -121,7 +148,7 @@ function resolveEffectPassGroups({
 			const definition = effectsRegistry.get(effect.type);
 			return resolveEffectPasses({
 				definition,
-				effectParams: resolvedParams,
+				effectParams: { ...resolvedParams, __time: localTime },
 				width,
 				height,
 			});

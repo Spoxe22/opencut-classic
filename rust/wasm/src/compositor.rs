@@ -13,6 +13,12 @@ use crate::gpu::{
 };
 use crate::perf;
 
+#[wasm_bindgen(js_name = transitionCatalog)]
+pub fn transition_catalog() -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(compositor::TRANSITION_PRESETS)
+        .map_err(|error| JsValue::from_str(&error.to_string()))
+}
+
 struct CompositorRuntime {
     canvas: web_sys::HtmlCanvasElement,
     compositor: Compositor,

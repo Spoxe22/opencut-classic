@@ -16,11 +16,23 @@ export interface Bookmark {
 	duration?: MediaTime;
 }
 
+export type TransitionParamValues = Record<string, number | number[]>;
+
+export interface TransitionInstance {
+	id: string;
+	fromElementId: string;
+	toElementId: string;
+	type: string;
+	duration: MediaTime;
+	params: TransitionParamValues;
+}
+
 export interface TScene {
 	id: string;
 	name: string;
 	isMain: boolean;
 	tracks: SceneTracks;
+	transitions: TransitionInstance[];
 	bookmarks: Bookmark[];
 	createdAt: Date;
 	updatedAt: Date;

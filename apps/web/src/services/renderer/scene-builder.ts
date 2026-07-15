@@ -1,4 +1,8 @@
-import type { SceneTracks, TimelineTrack } from "@/timeline";
+import type {
+	SceneTracks,
+	TimelineTrack,
+	TransitionInstance,
+} from "@/timeline";
 import type { MediaAsset } from "@/media/types";
 import { RootNode } from "./nodes/root-node";
 import { VideoNode } from "./nodes/video-node";
@@ -9,6 +13,7 @@ import { GraphicNode } from "./nodes/graphic-node";
 import { ColorNode } from "./nodes/color-node";
 import { BlurBackgroundNode } from "./nodes/blur-background-node";
 import { EffectLayerNode } from "./nodes/effect-layer-node";
+import { TransitionNode } from "./nodes/transition-node";
 import type { AnyBaseNode } from "./nodes/base-node";
 import type { TBackground, TCanvasSize } from "@/project/types";
 import { DEFAULT_BACKGROUND_BLUR_INTENSITY } from "@/background/blur";
@@ -220,6 +225,7 @@ export type BuildSceneParams = {
 	mediaAssets: MediaAsset[];
 	duration: number;
 	background: TBackground;
+	transitions?: TransitionInstance[];
 	isPreview?: boolean;
 };
 
@@ -229,20 +235,24 @@ export function buildScene({
 	mediaAssets,
 	duration,
 	background,
+	transitions = [],
 	isPreview,
 }: BuildSceneParams) {
 	const rootNode = new RootNode({ duration });
 	const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
 
-	const visibleTracks = [
-		...tracks.overlay.filter((track) => !("hidden" in track && track.hidden)),
-		...(!tracks.main.hidden ? [tracks.main] : []),
-	];
-	const orderedTracksBottomToTop = visibleTracks.slice().reverse();
+	const visibleOverlays = tracks.overlay.filter(
+		(track) => !("hidden" in track && track.hidden),
+	);
 	const mainTrack = tracks.main.hidden ? undefined : tracks.main;
-
-	const allNodes = buildTrackNodes({
-		tracks: orderedTracksBottomToTop,
+	const mainNodes = buildTrackNodes({
+		tracks: mainTrack ? [mainTrack] : [],
+		mediaMap,
+		canvasSize,
+		isPreview,
+	});
+	const overlayNodes = buildTrackNodes({
+		tracks: visibleOverlays.slice().reverse(),
 		mediaMap,
 		canvasSize,
 		isPreview,
@@ -265,7 +275,41 @@ export function buildScene({
 		rootNode.add(new ColorNode({ color: background.color }));
 	}
 
-	for (const node of allNodes) {
+	for (const node of mainNodes) {
+		rootNode.add(node);
+	}
+
+	if (mainTrack) {
+		const elements = new Map(mainTrack.elements.map((element) => [element.id, element]));
+		for (const transition of transitions) {
+			const from = elements.get(transition.fromElementId);
+			const to = elements.get(transition.toElementId);
+			if (from?.type !== "image" || to?.type !== "image") continue;
+			const fromMedia = mediaMap.get(from.mediaId);
+			const toMedia = mediaMap.get(to.mediaId);
+			if (!fromMedia?.url || !toMedia?.url) continue;
+			rootNode.add(
+				new TransitionNode({
+					from: {
+						id: fromMedia.id,
+						url: fromMedia.url,
+						...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
+					},
+					to: {
+						id: toMedia.id,
+						url: toMedia.url,
+						...(isPreview && { maxSourceSize: PREVIEW_MAX_IMAGE_SIZE }),
+					},
+					type: transition.type,
+					params: transition.params,
+					timeOffset: to.startTime - transition.duration,
+					duration: transition.duration,
+				}),
+			);
+		}
+	}
+
+	for (const node of overlayNodes) {
 		rootNode.add(node);
 	}
 

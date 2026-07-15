@@ -16,6 +16,7 @@ import { RootNode } from "../nodes/root-node";
 import { StickerNode } from "../nodes/sticker-node";
 import { renderTextToContext, TextNode } from "../nodes/text-node";
 import { VideoNode } from "../nodes/video-node";
+import { TransitionNode } from "../nodes/transition-node";
 import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
 import type {
 	FrameDescriptor,
@@ -127,6 +128,35 @@ async function collectNode({
 		items.push({
 			type: "sceneEffect",
 			effectPassGroups: [node.resolved.passes],
+		});
+		return;
+	}
+
+	if (node instanceof TransitionNode) {
+		if (!node.resolved) return;
+		const fromTextureId = `${path}:from`;
+		const toTextureId = `${path}:to`;
+		textures.set(fromTextureId, {
+			kind: "external",
+			id: fromTextureId,
+			source: node.resolved.from.source,
+			width: node.resolved.from.width,
+			height: node.resolved.from.height,
+		});
+		textures.set(toTextureId, {
+			kind: "external",
+			id: toTextureId,
+			source: node.resolved.to.source,
+			width: node.resolved.to.width,
+			height: node.resolved.to.height,
+		});
+		items.push({
+			type: "transition",
+			fromTextureId,
+			toTextureId,
+			preset: node.params.type,
+			progress: node.resolved.progress,
+			params: node.params.params,
 		});
 		return;
 	}

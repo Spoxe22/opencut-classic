@@ -14,6 +14,10 @@ import { usePropertiesStore } from "./stores/properties-store";
 import { getPropertiesConfig } from "./registry";
 import { cn } from "@/utils/ui";
 import { EmptyView } from "./empty-view";
+import type { ElementRef } from "@/timeline";
+import { RemoveTransitionCommand, SetTransitionCommand } from "@/commands/transitions";
+import { transitionCatalog } from "@/transitions/catalog";
+import { mediaTimeFromSeconds, mediaTimeToSeconds } from "@/wasm";
 
 export function PropertiesPanel() {
 	const editor = useEditor();
@@ -31,6 +35,9 @@ export function PropertiesPanel() {
 	}
 
 	if (selectedElements.length > 1) {
+		if (selectedElements.length === 2) {
+			return <TransitionProperties selectedElements={selectedElements} />;
+		}
 		return (
 			<div className="panel bg-background flex h-full flex-col items-center justify-center overflow-hidden rounded-sm border">
 				<p className="text-muted-foreground text-sm">
@@ -95,6 +102,89 @@ export function PropertiesPanel() {
 			<ScrollArea className="flex-1 scrollbar-hidden">
 				{activeTab.content({ trackId: track.id })}
 			</ScrollArea>
+		</div>
+	);
+}
+
+function TransitionProperties({
+	selectedElements,
+}: {
+	selectedElements: ElementRef[];
+}) {
+	const editor = useEditor();
+	const scene = editor.scenes.getActiveScene();
+	const selectedIds = new Set(selectedElements.map((item) => item.elementId));
+	const transition = scene.transitions.find(
+		(item) => selectedIds.has(item.fromElementId) && selectedIds.has(item.toElementId),
+	);
+	if (!transition) {
+		return (
+			<div className="panel bg-background flex h-full items-center justify-center rounded-sm border p-6 text-center">
+				<p className="text-muted-foreground text-sm">
+					Aucune transition entre ces deux éléments.
+				</p>
+			</div>
+		);
+	}
+	const definition = transitionCatalog.find((item) => item.id === transition.type);
+	const update = (patch: Partial<typeof transition>) => {
+		editor.command.execute({
+			command: new SetTransitionCommand({ ...transition, ...patch }),
+		});
+	};
+
+	return (
+		<div className="panel bg-background h-full overflow-y-auto rounded-sm border p-4">
+			<h3 className="mb-4 text-sm font-medium">{definition?.name ?? transition.type}</h3>
+			<label className="mb-4 block text-xs text-muted-foreground">
+				Durée (secondes)
+				<input
+					type="number"
+					min={0.05}
+					step={0.05}
+					value={mediaTimeToSeconds({ time: transition.duration })}
+					onChange={(event) =>
+						update({
+							duration: mediaTimeFromSeconds({
+								seconds: Math.max(0.05, Number(event.target.value)),
+							}),
+						})
+					}
+					className="bg-background mt-1 h-8 w-full rounded border px-2 text-foreground"
+				/>
+			</label>
+			{definition?.params.map((param) => (
+				<label key={param.key} className="mb-3 block text-xs text-muted-foreground">
+					{param.label}
+					<input
+						type="range"
+						min={param.min}
+						max={param.max}
+						step={param.step}
+						value={Number(transition.params[param.key] ?? param.default)}
+						onChange={(event) =>
+							update({
+								params: {
+									...transition.params,
+									[param.key]: Number(event.target.value),
+								},
+							})
+						}
+						className="mt-1 w-full"
+					/>
+				</label>
+			))}
+			<Button
+				variant="destructive"
+				size="sm"
+				onClick={() =>
+					editor.command.execute({
+						command: new RemoveTransitionCommand(transition.id),
+					})
+				}
+			>
+				Supprimer la transition
+			</Button>
 		</div>
 	);
 }

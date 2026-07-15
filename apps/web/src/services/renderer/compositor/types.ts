@@ -1,5 +1,6 @@
 import type { BlendMode } from "@/rendering";
 import type { EffectPass } from "@/effects/types";
+import type { TransitionParamValues } from "@/timeline";
 
 export type FrameDescriptor = {
 	width: number;
@@ -23,6 +24,14 @@ export type FrameItemDescriptor =
 	| {
 			type: "sceneEffect";
 			effectPassGroups: EffectPass[][];
+	  }
+	| {
+			type: "transition";
+			fromTextureId: string;
+			toTextureId: string;
+			preset: string;
+			progress: number;
+			params: TransitionParamValues;
 	  };
 
 export type QuadTransformDescriptor = {
