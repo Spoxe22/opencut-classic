@@ -101,7 +101,8 @@ struct FilmRollSixUniformBuffer {
     progress: f32,
     aspect_ratio: f32,
     strip_width: f32,
-    _padding: [f32; 3],
+    // WGSL aligns the trailing vec3 to 16 bytes, so the struct occupies 48 bytes.
+    _padding: [f32; 7],
 }
 
 impl Compositor {
@@ -826,7 +827,7 @@ impl Compositor {
                         progress: effect.progress.clamp(0.0, 1.0),
                         aspect_ratio: frame.width as f32 / frame.height.max(1) as f32,
                         strip_width: effect.strip_width.clamp(0.2, 1.0),
-                        _padding: [0.0; 3],
+                        _padding: [0.0; 7],
                     }),
                     usage: wgpu::BufferUsages::UNIFORM,
                 });
@@ -1273,4 +1274,16 @@ fn map_effect_passes(passes: &[EffectPassDescriptor]) -> Vec<EffectPass> {
                 .collect(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uniform_buffers_match_wgsl_alignment() {
+        assert_eq!(std::mem::size_of::<LayerUniformBuffer>(), 48);
+        assert_eq!(std::mem::size_of::<TransitionUniformBuffer>(), 96);
+        assert_eq!(std::mem::size_of::<FilmRollSixUniformBuffer>(), 48);
+    }
 }
