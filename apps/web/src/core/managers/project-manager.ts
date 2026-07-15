@@ -166,16 +166,6 @@ export class ProjectManager {
 				],
 			});
 
-			if (!project.metadata.thumbnail) {
-				try {
-					const didUpdateThumbnail = await this.updateThumbnailFromTimeline();
-					if (didUpdateThumbnail) {
-						await this.saveCurrentProject();
-					}
-				} catch (error) {
-					console.error("Failed to generate project thumbnail:", error);
-				}
-			}
 		} catch (error) {
 			console.error("Failed to load project:", error);
 			throw error;

@@ -197,6 +197,16 @@ impl GpuContext {
         ),
         GpuError,
     > {
+        // WSL Chromium advertises WebGPU but can destroy the device after its
+        // first canvas submission. The existing WebGL renderer is stable there.
+        if web_sys::window()
+            .and_then(|window| window.navigator().user_agent().ok())
+            .is_some_and(|agent| agent.contains("Linux"))
+        {
+            let (instance, adapter, device, queue, canvas) = Self::try_gl_fallback().await?;
+            return Ok((instance, adapter, device, queue, Some(canvas)));
+        }
+
         let instance = wgpu::util::new_instance_with_webgpu_detection(
             wgpu::InstanceDescriptor::new_without_display_handle(),
         )
